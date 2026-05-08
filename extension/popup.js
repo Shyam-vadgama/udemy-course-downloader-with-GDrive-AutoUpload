@@ -93,15 +93,17 @@ async function checkStoredToken() {
 
 async function connectDrive() {
   if (driveToken) {
-    clearCachedToken(driveToken);
+    try {
+      await chrome.identity.removeCachedAuthToken({ token: driveToken });
+    } catch (e) {
+      console.log("Clear token error:", e);
+    }
     driveToken = null;
     chrome.storage.local.remove(["driveToken", "driveAccount"]);
     updateDriveUI(false);
     document.getElementById("drive-status").textContent = "Disconnected";
     return;
   }
-
-  clearCachedTokens();
 
   const btn = document.getElementById("connect-drive-btn");
   btn.disabled = true;
@@ -110,25 +112,30 @@ async function connectDrive() {
   document.getElementById("drive-status").className = "status processing";
 
   try {
-    const token = await chrome.identity.getAuthToken({ interactive: true });
-    driveToken = token.access_token;
+    const result = await chrome.identity.getAuthToken({ interactive: true });
+    driveToken = result.accessToken;
 
-    const account = await getDriveAccount(token.access_token);
+    if (!driveToken) {
+      throw new Error("No token received");
+    }
 
-    saveSettings("driveToken", token.access_token);
+    const account = await getDriveAccount(driveToken);
+
+    saveSettings("driveToken", driveToken);
     saveSettings("driveAccount", account);
 
     updateDriveUI(true, account);
-    document.getElementById("drive-token").value = token.access_token;
+    document.getElementById("drive-token").value = driveToken;
+    document.getElementById("drive-status").textContent = `Connected: ${account}`;
+    document.getElementById("drive-status").className = "status success";
   } catch (e) {
     console.error("Drive auth error:", e);
     if (e.message && e.message.includes("invalid_client")) {
       document.getElementById("drive-status").textContent = "Setup needed: Add client_id to manifest.json";
-      document.getElementById("drive-status").className = "status error";
     } else {
-      document.getElementById("drive-status").textContent = "Connection failed";
-      document.getElementById("drive-status").className = "status error";
+      document.getElementById("drive-status").textContent = `Error: ${e.message}`;
     }
+    document.getElementById("drive-status").className = "status error";
   } finally {
     btn.disabled = false;
     btn.textContent = "Connect Google Drive";
@@ -152,20 +159,6 @@ async function testDriveToken(token) {
     headers: { Authorization: `Bearer ${token}` },
   });
   return res.ok;
-}
-
-function clearCachedToken(token) {
-  chrome.runtime.sendMessage({ type: "clearToken", token });
-}
-
-function clearCachedTokens() {
-  const manifest = chrome.runtime.getManifest();
-  const clientId = manifest.oauth2?.client_id || manifest.oauth2?.client_id;
-  if (clientId) {
-    chrome.identity.clearAllCachedAuthToken(() => {
-      console.log("All cached tokens cleared");
-    });
-  }
 }
 
 async function detectCurrentCourse() {
