@@ -26,10 +26,10 @@ module.exports = async (req, res) => {
 
 async function handlePost(req, res) {
   try {
-    const { courseUrl, cookies, driveCredentials, jobId, action } = req.body;
+    const { courseUrl, cookies, driveCredentials, jobId: existingJobId, action } = req.body;
 
-    if (action === "next" && jobId) {
-      const job = await processJob(jobId);
+    if (action === "next" && existingJobId) {
+      const job = await processJob(existingJobId);
       return res.status(200).json({
         status: job.status,
         currentVideo: job.currentVideo?.filename || null,
