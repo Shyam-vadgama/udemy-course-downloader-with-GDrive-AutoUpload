@@ -126,7 +126,8 @@ async function connectDrive() {
     authUrl.searchParams.set("redirect_uri", redirectUri);
     authUrl.searchParams.set("response_type", "token");
     authUrl.searchParams.set("scope", "https://www.googleapis.com/auth/drive");
-    authUrl.searchParams.set("prompt", "select_account");
+    authUrl.searchParams.set("prompt", "select_account consent");
+    authUrl.searchParams.set("access_type", "offline");
 
     const responseUrl = await chrome.identity.launchWebAuthFlow({
       url: authUrl.toString(),
