@@ -3,9 +3,6 @@
   "version": "1.0.0",
   "description": "Udemy course downloader with Google Drive upload",
   "private": true,
-  "engines": {
-    "node": ">=18.x"
-  },
   "dependencies": {
     "googleapis": "^131.0.0"
   }
