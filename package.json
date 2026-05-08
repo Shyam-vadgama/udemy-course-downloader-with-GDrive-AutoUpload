@@ -1,6 +1,7 @@
 {
   "name": "udemy-snap",
   "private": true,
+  "main": "api/index.js",
   "dependencies": {
     "googleapis": "^131.0.0"
   }
