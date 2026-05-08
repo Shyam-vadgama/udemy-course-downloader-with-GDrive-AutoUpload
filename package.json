@@ -1,0 +1,5 @@
+{
+  "name": "udemy-snap",
+  "private": true,
+  "main": "api/start.js"
+}
