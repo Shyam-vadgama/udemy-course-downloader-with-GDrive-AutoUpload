@@ -112,11 +112,41 @@ async function connectDrive() {
   document.getElementById("drive-status").className = "status processing";
 
   try {
-    const result = await chrome.identity.getAuthToken({ interactive: true });
-    driveToken = result.accessToken;
+    const manifest = chrome.runtime.getManifest();
+    const clientId = manifest.oauth2?.client_id;
+
+    if (!clientId) {
+      throw new Error("No client_id in manifest.json");
+    }
+
+    const redirectUri = `https://${chrome.runtime.id}.chromiumapp.org/`;
+
+    const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    authUrl.searchParams.set("client_id", clientId);
+    authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("response_type", "token");
+    authUrl.searchParams.set("scope", "https://www.googleapis.com/auth/drive");
+    authUrl.searchParams.set("prompt", "select_account");
+
+    const responseUrl = await chrome.identity.launchWebAuthFlow({
+      url: authUrl.toString(),
+      interactive: true,
+    });
+
+    if (!responseUrl) {
+      throw new Error("Auth cancelled or failed");
+    }
+
+    const hash = responseUrl.split("#")[1];
+    if (!hash) {
+      throw new Error("No token in response");
+    }
+
+    const params = new URLSearchParams(hash);
+    driveToken = params.get("access_token");
 
     if (!driveToken) {
-      throw new Error("No token received");
+      throw new Error("No access token received");
     }
 
     const account = await getDriveAccount(driveToken);
@@ -130,8 +160,10 @@ async function connectDrive() {
     document.getElementById("drive-status").className = "status success";
   } catch (e) {
     console.error("Drive auth error:", e);
-    if (e.message && e.message.includes("invalid_client")) {
-      document.getElementById("drive-status").textContent = "Setup needed: Add client_id to manifest.json";
+    if (e.message === "Auth cancelled or failed") {
+      document.getElementById("drive-status").textContent = "Auth cancelled";
+    } else if (e.message.includes("No client_id")) {
+      document.getElementById("drive-status").textContent = "Add client_id to manifest.json";
     } else {
       document.getElementById("drive-status").textContent = `Error: ${e.message}`;
     }
