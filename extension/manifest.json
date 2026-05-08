@@ -27,8 +27,7 @@
     "identity"
   ],
   "oauth2": {
-    "client_id": "765891603059-6ml0721oj2f5bn0nt63eplcae7jc80fs.apps.googleusercontent.com",
-    "scopes": [
+    "client_id": "",
       "https://www.googleapis.com/auth/drive"
     ]
   },

@@ -119,7 +119,7 @@ async function connectDrive() {
       throw new Error("No client_id in manifest.json");
     }
 
-    const redirectUri = `https://${chrome.runtime.id}.chromiumapp.org/`;
+    const redirectUri = `https://${chrome.runtime.id}.chromiumapp.org/auth`;
 
     const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     authUrl.searchParams.set("client_id", clientId);
@@ -243,17 +243,18 @@ async function startDownload() {
     const cookies = await getCookies();
     const driveCredentials = { access_token: driveToken };
 
-    const response = await fetch(`${backendUrl}/api/start`, {
+    const response = await fetch(`${backendUrl}/api`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ courseUrl, cookies, driveCredentials }),
     });
 
-    const data = await response.json();
-
     if (!response.ok) {
-      throw new Error(data.error || "Failed to start job");
+      const text = await response.text();
+      throw new Error(`Server error (${response.status}): ${text}`);
     }
+
+    const data = await response.json();
 
     saveSettings("jobId", data.jobId);
     setStatus("setup-status", `Ready: ${data.totalVideos} videos found`, "success");
@@ -282,7 +283,7 @@ async function processNext() {
   setStatus("setup-status", "Downloading video...", "processing");
 
   try {
-    const response = await fetch(`${backendUrl}/api/start`, {
+    const response = await fetch(`${backendUrl}/api`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ jobId, action: "next" }),
@@ -317,7 +318,7 @@ async function showJobStatus(jobId) {
   if (!backendUrl || !jobId) return;
 
   try {
-    const response = await fetch(`${backendUrl}/api/status?jobId=${jobId}`);
+    const response = await fetch(`${backendUrl}/api?jobId=${jobId}`);
     const job = await response.json();
 
     if (!response.ok) {

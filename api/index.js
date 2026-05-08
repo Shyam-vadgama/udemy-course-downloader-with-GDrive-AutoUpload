@@ -1,16 +1,33 @@
 const UDEMY_API = "https://www.udemy.com/api-2.0";
-const jobs = new Map();
+
+const JOBS_KEY = "jobs";
+
+function getJobs() {
+  if (typeof globalThis[JOBS_KEY] === "undefined") {
+    globalThis[JOBS_KEY] = new Map();
+  }
+  return globalThis[JOBS_KEY];
+}
 
 module.exports = async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
   if (req.method === "POST") return handlePost(req, res);
   if (req.method === "GET") return handleGet(req, res);
+
   res.status(405).json({ error: "Method not allowed" });
 };
 
 async function handlePost(req, res) {
-  const { courseUrl, cookies, driveCredentials, jobId, action } = req.body;
-
   try {
+    const { courseUrl, cookies, driveCredentials, jobId, action } = req.body;
+
     if (action === "next" && jobId) {
       const job = await processJob(jobId);
       return res.status(200).json({
@@ -18,7 +35,7 @@ async function handlePost(req, res) {
         currentVideo: job.currentVideo?.filename || null,
         completed: job.completedVideos,
         total: job.totalVideos,
-        remaining: job.videoQueue.length,
+        remaining: job.videoQueue?.length || 0,
         result: job.results?.[job.results.length - 1] || null,
       });
     }
@@ -56,6 +73,7 @@ async function handlePost(req, res) {
       }
     }
 
+    const jobs = getJobs();
     jobs.set(jobId, {
       id: jobId,
       status: "ready",
@@ -78,33 +96,40 @@ async function handlePost(req, res) {
 
     res.status(200).json({ jobId, courseTitle: course.title, totalVideos, status: "ready" });
   } catch (e) {
-    console.error("POST error:", e);
+    console.error("POST /api/start error:", e);
     res.status(500).json({ error: e.message });
   }
 }
 
 async function handleGet(req, res) {
-  const jobId = req.query.jobId;
-  if (!jobId) return res.status(400).json({ error: "Missing jobId" });
+  try {
+    const jobId = req.query.jobId;
+    if (!jobId) return res.status(400).json({ error: "Missing jobId" });
 
-  const job = jobs.get(jobId);
-  if (!job) return res.status(404).json({ error: "Job not found" });
+    const jobs = getJobs();
+    const job = jobs.get(jobId);
+    if (!job) return res.status(404).json({ error: "Job not found" });
 
-  res.status(200).json({
-    id: job.id,
-    status: job.status,
-    courseTitle: job.courseTitle,
-    totalVideos: job.totalVideos,
-    completedVideos: job.completedVideos,
-    progress: job.totalVideos ? Math.round((job.completedVideos / job.totalVideos) * 100) : 0,
-    currentVideo: job.currentVideo?.filename || null,
-    errors: job.errors || [],
-    resultsCount: (job.results || []).length,
-    updatedAt: job.updatedAt,
-  });
+    res.status(200).json({
+      id: job.id,
+      status: job.status,
+      courseTitle: job.courseTitle,
+      totalVideos: job.totalVideos,
+      completedVideos: job.completedVideos,
+      progress: job.totalVideos ? Math.round((job.completedVideos / job.totalVideos) * 100) : 0,
+      currentVideo: job.currentVideo?.filename || null,
+      errors: job.errors || [],
+      resultsCount: (job.results || []).length,
+      updatedAt: job.updatedAt,
+    });
+  } catch (e) {
+    console.error("GET /api/status error:", e);
+    res.status(500).json({ error: e.message });
+  }
 }
 
 async function processJob(jobId) {
+  const jobs = getJobs();
   const job = jobs.get(jobId);
   if (!job) throw new Error("Job not found");
 
@@ -132,6 +157,7 @@ async function processJob(jobId) {
     job.status = job.videoQueue.length ? "ready" : "completed";
     job.updatedAt = new Date().toISOString();
   } catch (e) {
+    console.error("Process video error:", e);
     job.errors = [...(job.errors || []), { filename: video.filename, error: e.message }];
     job.currentVideo = null;
     job.status = "ready";
