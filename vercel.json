@@ -4,5 +4,7 @@
     "api/**/*.js": {
       "maxDuration": 60
     }
-  }
+  },
+  "buildCommand": null,
+  "outputDirectory": null
 }
