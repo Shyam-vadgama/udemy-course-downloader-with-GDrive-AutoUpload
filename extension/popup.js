@@ -93,7 +93,7 @@ async function checkStoredToken() {
 
 async function connectDrive() {
   if (driveToken) {
-    chrome.runtime.sendMessage({ type: "clearToken", token: driveToken });
+    clearCachedToken(driveToken);
     driveToken = null;
     chrome.storage.local.remove(["driveToken", "driveAccount"]);
     updateDriveUI(false);
@@ -101,10 +101,12 @@ async function connectDrive() {
     return;
   }
 
+  clearCachedTokens();
+
   const btn = document.getElementById("connect-drive-btn");
   btn.disabled = true;
-  btn.textContent = "Connecting...";
-  document.getElementById("drive-status").textContent = "Requesting access...";
+  btn.textContent = "Choose account...";
+  document.getElementById("drive-status").textContent = "Select your Google account...";
   document.getElementById("drive-status").className = "status processing";
 
   try {
@@ -150,6 +152,20 @@ async function testDriveToken(token) {
     headers: { Authorization: `Bearer ${token}` },
   });
   return res.ok;
+}
+
+function clearCachedToken(token) {
+  chrome.runtime.sendMessage({ type: "clearToken", token });
+}
+
+function clearCachedTokens() {
+  const manifest = chrome.runtime.getManifest();
+  const clientId = manifest.oauth2?.client_id || manifest.oauth2?.client_id;
+  if (clientId) {
+    chrome.identity.clearAllCachedAuthToken(() => {
+      console.log("All cached tokens cleared");
+    });
+  }
 }
 
 async function detectCurrentCourse() {
