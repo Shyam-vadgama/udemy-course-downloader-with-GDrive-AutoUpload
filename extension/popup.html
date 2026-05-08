@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Udemy Snap</title>
+    <style>
+        * {
+            --accent-color: rgba(164, 53, 240, 1);
+            --accent-color2: rgba(164, 53, 240, 0.5);
+            --accent-color3: rgba(241, 104, 105, 0.7);
+            --accent-color4: rgba(241, 104, 105, 1);
+            --success: #22c55e;
+            --warning: #f59e0b;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: auto;
+            width: 320px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            border: 2px solid var(--accent-color3);
+            border-radius: 15px;
+            padding: 20px;
+            letter-spacing: 0.5px;
+            font-size: 14px;
+            gap: 12px;
+            margin: 0;
+        }
+
+        img {
+            height: 50px;
+        }
+
+        .info-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        h4 {
+            margin: 8px 0 4px;
+            font-size: 16px;
+        }
+
+        p {
+            margin: 0;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .section {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #888;
+            letter-spacing: 1px;
+            margin-bottom: 2px;
+        }
+
+        label {
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        input[type="text"], input[type="password"], textarea, select {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 60px;
+            font-family: monospace;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        button {
+            border: none;
+            background-color: var(--accent-color4);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-weight: 600;
+            font-size: 12px;
+            letter-spacing: 0.5px;
+            width: 100%;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        button.secondary {
+            background-color: #666;
+        }
+
+        button.success {
+            background-color: var(--success);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #eee;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--accent-color);
+            transition: width 0.3s;
+        }
+
+        .status {
+            font-size: 11px;
+            color: #666;
+            text-align: center;
+        }
+
+        .status.success { color: var(--success); }
+        .status.error { color: var(--accent-color4); }
+        .status.processing { color: var(--warning); }
+
+        .hidden { display: none; }
+
+        .tabs {
+            display: flex;
+            width: 100%;
+            border-bottom: 1px solid #eee;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 8px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            border-bottom-color: var(--accent-color);
+            color: var(--accent-color);
+            font-weight: 600;
+        }
+
+        .tab-content {
+            width: 100%;
+        }
+
+        .hint {
+            font-size: 10px;
+            color: #999;
+            margin-top: 2px;
+        }
+
+        .video-item {
+            font-size: 11px;
+            padding: 4px 8px;
+            background: #f9f9f9;
+            border-radius: 4px;
+            margin-top: 4px;
+        }
+
+        .divider {
+            width: 100%;
+            height: 1px;
+            background: #eee;
+            margin: 4px 0;
+        }
+    </style>
+</head>
+<body>
+    <img src="./icon.png" alt="">
+    <div class="info-container">
+        <h4>UDEMY SNAP</h4>
+        <p>Download courses to Google Drive</p>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" data-tab="setup">Setup</div>
+        <div class="tab" data-tab="status">Status</div>
+    </div>
+
+    <div class="tab-content" id="setup-tab">
+        <div class="section">
+            <div class="section-title">Backend URL</div>
+            <input type="text" id="backend-url" placeholder="https://your-app.vercel.app">
+            <div class="hint">Your deployed Vercel backend URL</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section">
+            <div class="section-title">Google Drive</div>
+            <button id="connect-drive-btn">Connect Google Drive</button>
+            <div id="drive-status" class="status">Not connected</div>
+            <div class="hidden" id="drive-info">
+                <div class="video-item" id="drive-account"></div>
+            </div>
+            <input type="hidden" id="drive-token">
+            <select id="auth-type" class="hidden">
+                <option value="token" selected>Auto (OAuth)</option>
+            </select>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section">
+            <div class="section-title">Course</div>
+            <input type="text" id="course-url" placeholder="Auto-detected from current tab">
+            <div class="hint">Open a Udemy course page to auto-fill</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <button id="start-btn">Start Download</button>
+        <button id="next-btn" class="hidden secondary">Process Next Video</button>
+        <div id="setup-status" class="status"></div>
+    </div>
+
+    <div class="tab-content hidden" id="status-tab">
+        <div class="section">
+            <div class="section-title">Job Progress</div>
+            <div id="job-course" class="status">No active job</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+            </div>
+            <div id="job-stats" class="status">0 / 0 videos</div>
+            <div id="job-current" class="video-item hidden"></div>
+            <div id="job-errors" class="hidden"></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <button id="refresh-btn" class="secondary">Refresh Status</button>
+        <button id="continue-btn" class="hidden">Continue Processing</button>
+        <div id="job-status" class="status"></div>
+    </div>
+
+    <script src="./popup.js"></script>
+</body>
+</html>

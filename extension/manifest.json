@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Udemy Snap",
+  "version": "1.0.0",
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png",
+    "default_title": "Udemy Snap"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.udemy.com/*"
+      ],
+      "js": [
+        "content.js"
+      ]
+    }
+  ],
+  "icons": {
+    "128": "icon.png"
+  },
+  "permissions": [
+    "activeTab",
+    "cookies",
+    "storage",
+    "identity"
+  ],
+  "oauth2": {
+    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/drive"
+    ]
+  },
+  "host_permissions": [
+    "https://*.udemy.com/*",
+    "https://*.vercel.app/*",
+    "https://*.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
