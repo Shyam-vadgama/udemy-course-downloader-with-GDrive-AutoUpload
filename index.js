@@ -131,19 +131,33 @@ async function fetchCourse(slug, cookies) {
   const info = await udemyRequest(`/courses/${slug}/`, cookies);
   const params = new URLSearchParams({
     "fields[asset]": "title,filename,media_sources", "fields[chapter]": "title",
-    "fields[lecture]": "title,asset", page_size: "1000",
+    "fields[lecture]": "title,asset,media_sources", page_size: "1000",
   });
   const curriculum = await udemyRequest(`/courses/${info.id}/cached-subscriber-curriculum-items?${params}`, cookies);
   const chapters = []; let current = null;
-  for (const item of curriculum.results || curriculum) {
+
+  const items = curriculum.results || curriculum;
+  for (const item of items) {
     if (item._class === "chapter") {
       current = { id: item.id, title: sanitize(item.title), lectures: [] };
       chapters.push(current);
-    } else if (current && item._class === "lecture" && item.asset?.media_sources) {
-      const v = getBestVideo(item.asset.media_sources);
-      if (v) current.lectures.push({ id: item.id, title: sanitize(item.title), filename: item.asset.filename || `${item.title}.mp4`, url: v.file });
+    } else if (current && item._class === "lecture") {
+      const asset = item.asset;
+      if (asset && asset.media_sources && asset.media_sources.length > 0) {
+        const v = getBestVideo(asset.media_sources);
+        if (v && v.file) {
+          current.lectures.push({
+            id: item.id, title: sanitize(item.title),
+            filename: (asset.filename || item.title) + ".mp4", url: v.file,
+          });
+        }
+      }
     }
   }
+
+  const total = chapters.reduce((s, c) => s + c.lectures.length, 0);
+  console.log(`[${slug}] Course: "${info.title}", Chapters: ${chapters.length}, Videos: ${total}`);
+
   return { id: info.id, title: info.title, chapters };
 }
 

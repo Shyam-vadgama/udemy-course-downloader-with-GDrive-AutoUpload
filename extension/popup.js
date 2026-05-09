@@ -344,7 +344,9 @@ async function getCookies() {
 
       try {
         const cookies = await chrome.cookies.getAll({ domain });
-        const cookieString = cookies
+        const udemyCookies = await chrome.cookies.getAll({ domain: "udemy.com" });
+        const all = [...cookies, ...udemyCookies.filter(c => !cookies.find(x => x.name === c.name))];
+        const cookieString = all
           .map((c) => `${c.name}=${c.value}`)
           .join("; ");
         resolve(cookieString);
