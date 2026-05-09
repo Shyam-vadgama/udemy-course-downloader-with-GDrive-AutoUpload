@@ -119,7 +119,7 @@ async function connectDrive() {
       throw new Error("No client_id in manifest.json");
     }
 
-    const redirectUri = `https://${chrome.runtime.id}.chromiumapp.org/auth`;
+    const redirectUri = `https://${chrome.runtime.id}.chromiumapp.org/`;
 
     const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     authUrl.searchParams.set("client_id", clientId);
