@@ -195,13 +195,18 @@ async function startDownload() {
   setStatus("setup-status", "Fetching course data...", "processing");
 
   try {
+    const courseData = await askContentForVideos();
+    if (courseData.error) throw new Error(courseData.error);
+
+    setStatus("setup-status", `Found ${courseData.totalVideos} videos. Sending to backend...`, "processing");
+
     const cookies = await getCookies();
     const driveCredentials = { access_token: driveToken };
 
     const response = await fetch(`${backendUrl}/api`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ courseUrl, cookies, driveCredentials }),
+      body: JSON.stringify({ courseData, driveCredentials }),
     });
 
     if (!response.ok) {
@@ -328,6 +333,24 @@ async function refreshStatus() {
 async function getStoredJobId() {
   return new Promise((resolve) => {
     chrome.storage.local.get("jobId", (data) => resolve(data.jobId || null));
+  });
+}
+
+async function askContentForVideos() {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (!tabs[0]) return reject(new Error("No active tab"));
+
+      chrome.tabs.sendMessage(
+        tabs[0].id,
+        { msg: "getCourseVideos" },
+        (response) => {
+          if (chrome.runtime.lastError)
+            return reject(new Error("Not on a Udemy course page"));
+          resolve(response);
+        }
+      );
+    });
   });
 }
 

@@ -9,7 +9,7 @@ const jobs = new Map();
 
 app.post("/api", async (req, res) => {
   try {
-    const { courseUrl, cookies, driveCredentials, jobId: existingJobId, action } = req.body;
+    const { courseData, driveCredentials, jobId: existingJobId, action } = req.body;
 
     if (action === "next" && existingJobId) {
       const job = await processJob(existingJobId);
@@ -23,52 +23,42 @@ app.post("/api", async (req, res) => {
       });
     }
 
-    if (!courseUrl || !cookies || !driveCredentials?.access_token) {
-      return res.status(400).json({ error: "Missing required fields" });
+    if (!courseData || !courseData.chapters || !driveCredentials?.access_token) {
+      return res.status(400).json({ error: "Missing required fields: courseData, driveCredentials" });
     }
-
-    const slug = extractCourseSlug(courseUrl);
-    if (!slug) return res.status(400).json({ error: "Invalid course URL" });
 
     const jobId = Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
-    let course;
-    try {
-      course = await fetchCourse(slug, cookies);
-    } catch (e) {
-      return res.status(400).json({ error: `Failed to fetch course: ${e.message}` });
-    }
-    const totalVideos = course.chapters.reduce((s, c) => s + c.lectures.length, 0);
-
+    const totalVideos = courseData.chapters.reduce((s, c) => s + c.lectures.length, 0);
     const token = driveCredentials.access_token;
-    const courseFolderId = await findOrCreateFolder(token, course.title);
+    const courseFolderId = await findOrCreateFolder(token, courseData.courseTitle);
 
     const chapterFolderIds = {};
-    for (const ch of course.chapters) {
+    for (const ch of courseData.chapters) {
       chapterFolderIds[ch.id] = await findOrCreateFolder(token, ch.title, courseFolderId);
     }
 
     const videoQueue = [];
-    for (const ch of course.chapters) {
+    for (const ch of courseData.chapters) {
       for (const lec of ch.lectures) {
         videoQueue.push({
           chapterId: ch.id,
           chapterTitle: ch.title,
           lectureId: lec.id,
           lectureTitle: lec.title,
-          filename: `${lec.title}.mp4`,
+          filename: lec.filename || `${lec.title}.mp4`,
           url: lec.url,
         });
       }
     }
 
     jobs.set(jobId, {
-      id: jobId, status: "ready", courseUrl, courseId: course.id, courseTitle: course.title,
-      token, cookies, totalVideos, completedVideos: 0, currentVideo: null,
+      id: jobId, status: "ready", courseData, courseId: courseData.courseId, courseTitle: courseData.courseTitle,
+      token, totalVideos, completedVideos: 0, currentVideo: null,
       courseFolderId, chapterFolderIds, videoQueue, errors: [], results: [],
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     });
 
-    res.json({ jobId, courseTitle: course.title, totalVideos, status: "ready" });
+    res.json({ jobId, courseTitle: courseData.courseTitle, totalVideos, status: "ready" });
   } catch (e) {
     console.error("POST error:", e);
     res.status(500).json({ error: e.message });
@@ -107,7 +97,7 @@ async function processJob(jobId) {
   job.status = "processing"; job.currentVideo = video; job.updatedAt = new Date().toISOString();
 
   try {
-    const buffer = await downloadVideo(video.url, job.cookies);
+    const buffer = await downloadVideo(video.url);
     const result = await uploadToDrive(job.token, job.chapterFolderIds[video.chapterId], video.filename, buffer);
     job.videoQueue.shift(); job.completedVideos++; job.results = [...(job.results || []), result];
     job.currentVideo = null; job.status = job.videoQueue.length ? "ready" : "completed";
@@ -298,10 +288,13 @@ async function uploadToDrive(token, folderId, filename, videoBuffer) {
     `multipart/related; boundary=${boundary}`);
 }
 
-async function downloadVideo(url, cookies) {
-  const headers = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" };
-  if (cookies) headers.Cookie = cookies;
-  const res = await fetch(url, { headers });
+async function downloadVideo(url) {
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      Referer: "https://www.udemy.com/",
+    },
+  });
   if (!res.ok) throw new Error(`Download failed: ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
 }
