@@ -33,15 +33,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function handleGoogleAuth(sendResponse) {
   try {
-    try {
-      const cached = await chrome.identity.getAuthToken({ interactive: false });
-      const token = cached?.token || cached?.accessToken || cached;
-      if (token) {
-        await new Promise((resolve) => chrome.identity.removeCachedAuthToken({ token }, resolve));
-      }
-    } catch {}
-    const tokenResult = await chrome.identity.getAuthToken({ interactive: true });
-    const accessToken = tokenResult?.token || tokenResult?.accessToken || tokenResult;
+    const manifest = chrome.runtime.getManifest();
+    const clientId = manifest.oauth2?.client_id;
+
+    if (!clientId) {
+      sendResponse({ error: "No client_id in manifest.json" });
+      return;
+    }
+
+    const redirectUri = `https://${chrome.runtime.id}.chromiumapp.org/`;
+
+    const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    authUrl.searchParams.set("client_id", clientId);
+    authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("response_type", "token");
+    authUrl.searchParams.set("scope", "https://www.googleapis.com/auth/drive");
+    authUrl.searchParams.set("prompt", "select_account");
+
+    const responseUrl = await chrome.identity.launchWebAuthFlow({
+      url: authUrl.toString(),
+      interactive: true,
+    });
+
+    if (!responseUrl) {
+      sendResponse({ error: "Auth cancelled or failed" });
+      return;
+    }
+
+    const hash = responseUrl.split("#")[1];
+    if (!hash) {
+      sendResponse({ error: "No token in response" });
+      return;
+    }
+
+    const params = new URLSearchParams(hash);
+    const accessToken = params.get("access_token");
+    const oauthError = params.get("error");
+
+    if (oauthError) {
+      sendResponse({ error: `OAuth error: ${oauthError}` });
+      return;
+    }
 
     if (!accessToken) {
       sendResponse({ error: "No access token received" });
