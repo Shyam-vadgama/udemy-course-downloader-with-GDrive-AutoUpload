@@ -108,47 +108,26 @@ async function connectDrive() {
   const btn = document.getElementById("connect-drive-btn");
   btn.disabled = true;
   btn.textContent = "Choose account...";
-  document.getElementById("drive-status").textContent = "Select your Google account...";
+  document.getElementById("drive-status").textContent = "Opening Google sign-in...";
   document.getElementById("drive-status").className = "status processing";
 
   try {
-    const manifest = chrome.runtime.getManifest();
-    const clientId = manifest.oauth2?.client_id;
-
-    if (!clientId) {
-      throw new Error("No client_id in manifest.json");
-    }
-
-    const redirectUri = `https://${chrome.runtime.id}.chromiumapp.org/`;
-
-    const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-    authUrl.searchParams.set("client_id", clientId);
-    authUrl.searchParams.set("redirect_uri", redirectUri);
-    authUrl.searchParams.set("response_type", "token");
-    authUrl.searchParams.set("scope", "https://www.googleapis.com/auth/drive");
-    authUrl.searchParams.set("prompt", "select_account");
-
-    const responseUrl = await chrome.identity.launchWebAuthFlow({
-      url: authUrl.toString(),
-      interactive: true,
+    const result = await new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(
+        { type: "getDriveToken" },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else if (response.error) {
+            reject(new Error(response.error));
+          } else {
+            resolve(response);
+          }
+        }
+      );
     });
 
-    if (!responseUrl) {
-      throw new Error("Auth cancelled or failed");
-    }
-
-    const hash = responseUrl.split("#")[1];
-    if (!hash) {
-      throw new Error("No token in response");
-    }
-
-    const params = new URLSearchParams(hash);
-    driveToken = params.get("access_token");
-
-    if (!driveToken) {
-      throw new Error("No access token received");
-    }
-
+    driveToken = result.token;
     const account = await getDriveAccount(driveToken);
 
     saveSettings("driveToken", driveToken);
