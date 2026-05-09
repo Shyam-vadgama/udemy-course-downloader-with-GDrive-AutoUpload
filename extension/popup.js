@@ -18,7 +18,7 @@ function loadSettings() {
       }
       if (data.driveToken) {
         driveToken = data.driveToken;
-        updateDriveUI(true, data.driveAccount);
+        updateDriveUI(true, data.driveAccount || "Google Drive connected");
       }
       if (data.jobId) {
         showJobStatus(data.jobId);
@@ -107,31 +107,26 @@ async function connectDrive() {
 
   const btn = document.getElementById("connect-drive-btn");
   btn.disabled = true;
-  btn.textContent = "Choose account...";
-  document.getElementById("drive-status").textContent = "Opening Google sign-in...";
+  btn.textContent = "Signing in...";
+  document.getElementById("drive-status").textContent = "Opening Google...";
   document.getElementById("drive-status").className = "status processing";
 
   try {
-    const result = await new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(
-        { type: "getDriveToken" },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else if (response.error) {
-            reject(new Error(response.error));
-          } else {
-            resolve(response);
-          }
-        }
-      );
-    });
+    chrome.runtime.sendMessage(
+      { type: "getDriveToken" }
+    );
 
-    driveToken = result.token;
-    const account = await getDriveAccount(driveToken);
+    document.getElementById("drive-status").textContent = "Sign-in opened in new window. Close this popup, authorize, then reopen extension.";
+    document.getElementById("drive-status").className = "status processing";
 
-    saveSettings("driveToken", driveToken);
-    saveSettings("driveAccount", account);
+    setTimeout(() => window.close(), 3000);
+  } catch (e) {
+    console.error("Drive auth error:", e);
+    document.getElementById("drive-status").textContent = `Error: ${e.message}`;
+    document.getElementById("drive-status").className = "status error";
+    btn.disabled = false;
+    btn.textContent = "Connect Google Drive";
+  }
 
     updateDriveUI(true, account);
     document.getElementById("drive-token").value = driveToken;
