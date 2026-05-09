@@ -127,25 +127,6 @@ async function connectDrive() {
     btn.disabled = false;
     btn.textContent = "Connect Google Drive";
   }
-
-    updateDriveUI(true, account);
-    document.getElementById("drive-token").value = driveToken;
-    document.getElementById("drive-status").textContent = `Connected: ${account}`;
-    document.getElementById("drive-status").className = "status success";
-  } catch (e) {
-    console.error("Drive auth error:", e);
-    if (e.message === "Auth cancelled or failed") {
-      document.getElementById("drive-status").textContent = "Auth cancelled";
-    } else if (e.message.includes("No client_id")) {
-      document.getElementById("drive-status").textContent = "Add client_id to manifest.json";
-    } else {
-      document.getElementById("drive-status").textContent = `Error: ${e.message}`;
-    }
-    document.getElementById("drive-status").className = "status error";
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Connect Google Drive";
-  }
 }
 
 async function getDriveAccount(token) {
