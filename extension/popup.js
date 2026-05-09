@@ -345,8 +345,15 @@ async function askContentForVideos() {
         tabs[0].id,
         { msg: "getCourseVideos" },
         (response) => {
-          if (chrome.runtime.lastError)
-            return reject(new Error("Not on a Udemy course page"));
+          if (chrome.runtime.lastError) {
+            const url = tabs[0].url || "";
+            if (url.includes("udemy.com/course/")) {
+              reject(new Error("Extension not loaded on this page. Please refresh the Udemy page and try again."));
+            } else {
+              reject(new Error("Open a Udemy course page first"));
+            }
+            return;
+          }
           resolve(response);
         }
       );
