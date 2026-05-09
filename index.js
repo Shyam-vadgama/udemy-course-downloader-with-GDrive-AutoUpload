@@ -1,8 +1,9 @@
 const express = require("express");
 const app = express();
 
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
+const UDEMY_BASE = "https://www.udemy.com";
 const UDEMY_API = "https://www.udemy.com/api-2.0";
 const jobs = new Map();
 
@@ -30,7 +31,12 @@ app.post("/api", async (req, res) => {
     if (!slug) return res.status(400).json({ error: "Invalid course URL" });
 
     const jobId = Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
-    const course = await fetchCourse(slug, cookies);
+    let course;
+    try {
+      course = await fetchCourse(slug, cookies);
+    } catch (e) {
+      return res.status(400).json({ error: `Failed to fetch course: ${e.message}` });
+    }
     const totalVideos = course.chapters.reduce((s, c) => s + c.lectures.length, 0);
 
     const token = driveCredentials.access_token;
@@ -120,15 +126,49 @@ function extractCourseSlug(url) {
 }
 
 async function udemyRequest(path, cookies) {
-  const res = await fetch(`${UDEMY_API}${path}`, {
-    headers: { Cookie: cookies, "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
-  });
-  if (!res.ok) throw new Error(`Udemy API error: ${res.status}`);
+  const headers = {
+    Cookie: cookies,
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Referer": "https://www.udemy.com/",
+    "Origin": "https://www.udemy.com",
+    "Accept": "application/json, text/plain, */*",
+    "X-Requested-With": "XMLHttpRequest",
+  };
+
+  const accessToken = cookies?.match(/access_token=([^;]+)/)?.[1];
+  const clientId = cookies?.match(/client_id=([^;]+)/)?.[1];
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+  if (clientId) headers["X-Udemy-Client-Id"] = clientId;
+
+  const res = await fetch(`${UDEMY_API}${path}`, { headers });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Udemy API ${path}: ${res.status} ${text.slice(0, 200)}`);
+  }
   return res.json();
 }
 
 async function fetchCourse(slug, cookies) {
-  const info = await udemyRequest(`/courses/${slug}/`, cookies);
+  let info;
+  try {
+    info = await udemyRequest(`/courses/${slug}/`, cookies);
+  } catch (e) {
+    try {
+      return await scrapeCoursePage(slug, cookies);
+    } catch (e2) {
+      throw new Error(`API: ${e.message}. Scrape: ${e2.message}`);
+    }
+  }
+
+  if (!info || !info.id) {
+    try {
+      return await scrapeCoursePage(slug, cookies);
+    } catch (e2) {
+      throw new Error(`Course info missing ID. API keys: ${Object.keys(info||{}).join(", ")}`);
+    }
+  }
+
   const params = new URLSearchParams({
     "fields[asset]": "title,filename,media_sources", "fields[chapter]": "title",
     "fields[lecture]": "title,asset,media_sources", page_size: "1000",
@@ -137,6 +177,10 @@ async function fetchCourse(slug, cookies) {
   const chapters = []; let current = null;
 
   const items = curriculum.results || curriculum;
+  if (items.length === 0) {
+    console.log("Curriculum empty, full response keys:", Object.keys(curriculum));
+  }
+
   for (const item of items) {
     if (item._class === "chapter") {
       current = { id: item.id, title: sanitize(item.title), lectures: [] };
@@ -156,9 +200,63 @@ async function fetchCourse(slug, cookies) {
   }
 
   const total = chapters.reduce((s, c) => s + c.lectures.length, 0);
-  console.log(`[${slug}] Course: "${info.title}", Chapters: ${chapters.length}, Videos: ${total}`);
 
   return { id: info.id, title: info.title, chapters };
+}
+
+async function scrapeCoursePage(slug, cookies) {
+  const url = `https://www.udemy.com/course/${slug}/`;
+  const res = await fetch(url, {
+    headers: {
+      Cookie: cookies,
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      Accept: "text/html",
+    },
+  });
+  if (!res.ok) throw new Error(`Scrape: status ${res.status}`);
+  const html = await res.text();
+
+  const titleMatch = html.match(/"title":"([^"]+)"/) || html.match(/<h1[^>]*>([^<]+)<\/h1>/);
+  const title = titleMatch ? titleMatch[1].replace(/\\/g, "") : slug;
+
+  const idMatch = html.match(/courseId["\s:=]+(\d+)/);
+  if (!idMatch) throw new Error("Could not find course ID in page");
+
+  const params = new URLSearchParams({
+    "fields[asset]": "title,filename,media_sources",
+    "fields[chapter]": "title",
+    "fields[lecture]": "title,asset,media_sources",
+    page_size: "1000",
+  });
+
+  try {
+    const curriculum = await udemyRequest(`/courses/${idMatch[1]}/cached-subscriber-curriculum-items?${params}`, cookies);
+    const chapters = []; let current = null;
+    const items = curriculum.results || curriculum;
+
+    for (const item of items) {
+      if (item._class === "chapter") {
+        current = { id: item.id, title: sanitize(item.title), lectures: [] };
+        chapters.push(current);
+      } else if (current && item._class === "lecture") {
+        const asset = item.asset;
+        if (asset && asset.media_sources && asset.media_sources.length > 0) {
+          const v = getBestVideo(asset.media_sources);
+          if (v && v.file) {
+            current.lectures.push({
+              id: item.id, title: sanitize(item.title),
+              filename: (asset.filename || item.title) + ".mp4", url: v.file,
+            });
+          }
+        }
+      }
+    }
+
+    const total = chapters.reduce((s, c) => s + c.lectures.length, 0);
+    return { id: idMatch[1], title, chapters };
+  } catch (e) {
+    throw new Error(`Scraped course but curriculum API failed: ${e.message}`);
+  }
 }
 
 function getBestVideo(sources) {
