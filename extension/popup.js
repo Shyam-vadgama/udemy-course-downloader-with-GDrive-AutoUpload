@@ -2,23 +2,29 @@ const DEFAULT_BACKEND = "";
 let driveToken = null;
 
 document.addEventListener("DOMContentLoaded", () => {
-  loadSettings();
   setupTabs();
   setupButtons();
   detectCurrentCourse();
-  checkStoredToken();
+  loadSettings();
 });
 
 function loadSettings() {
   chrome.storage.local.get(
     ["backendUrl", "driveToken", "driveAccount", "jobId"],
-    (data) => {
+    async (data) => {
       if (data.backendUrl) {
         document.getElementById("backend-url").value = data.backendUrl;
       }
       if (data.driveToken) {
         driveToken = data.driveToken;
-        updateDriveUI(true, data.driveAccount || "Google Drive connected");
+        const valid = await testDriveToken(driveToken);
+        if (valid) {
+          updateDriveUI(true, data.driveAccount || "Google Drive connected");
+        } else {
+          driveToken = null;
+          chrome.storage.local.remove("driveToken");
+          updateDriveUI(false);
+        }
       }
       if (data.jobId) {
         showJobStatus(data.jobId);
@@ -76,22 +82,9 @@ function updateDriveUI(connected, account = null) {
   }
 }
 
-async function checkStoredToken() {
-  if (!driveToken) return;
-
-  try {
-    const valid = await testDriveToken(driveToken);
-    if (!valid) {
-      driveToken = null;
-      chrome.storage.local.remove("driveToken");
-      updateDriveUI(false);
-    }
-  } catch (e) {
-    console.log("Stored token invalid:", e);
-  }
-}
-
 async function connectDrive() {
+  const btn = document.getElementById("connect-drive-btn");
+
   if (driveToken) {
     try {
       await chrome.identity.removeCachedAuthToken({ token: driveToken });
@@ -105,28 +98,16 @@ async function connectDrive() {
     return;
   }
 
-  const btn = document.getElementById("connect-drive-btn");
   btn.disabled = true;
   btn.textContent = "Signing in...";
   document.getElementById("drive-status").textContent = "Opening Google...";
   document.getElementById("drive-status").className = "status processing";
 
-  try {
-    chrome.runtime.sendMessage(
-      { type: "getDriveToken" }
-    );
+  chrome.runtime.sendMessage({ type: "getDriveToken" });
 
-    document.getElementById("drive-status").textContent = "Sign-in opened in new window. Close this popup, authorize, then reopen extension.";
-    document.getElementById("drive-status").className = "status processing";
-
-    setTimeout(() => window.close(), 3000);
-  } catch (e) {
-    console.error("Drive auth error:", e);
-    document.getElementById("drive-status").textContent = `Error: ${e.message}`;
-    document.getElementById("drive-status").className = "status error";
-    btn.disabled = false;
-    btn.textContent = "Connect Google Drive";
-  }
+  document.getElementById("drive-status").textContent =
+    "Auth started. Close this popup, authorize, then reopen.";
+  setTimeout(() => window.close(), 2000);
 }
 
 async function getDriveAccount(token) {
@@ -200,7 +181,6 @@ async function startDownload() {
 
     setStatus("setup-status", `Found ${courseData.totalVideos} videos. Sending to backend...`, "processing");
 
-    const cookies = await getCookies();
     const driveCredentials = { access_token: driveToken };
 
     const response = await fetch(`${backendUrl}/api`, {
@@ -361,28 +341,4 @@ async function askContentForVideos() {
   });
 }
 
-async function getCookies() {
-  return new Promise((resolve, reject) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-      if (!tabs[0]) {
-        reject(new Error("No active tab"));
-        return;
-      }
 
-      const url = new URL(tabs[0].url);
-      const domain = url.hostname;
-
-      try {
-        const cookies = await chrome.cookies.getAll({ domain });
-        const udemyCookies = await chrome.cookies.getAll({ domain: "udemy.com" });
-        const all = [...cookies, ...udemyCookies.filter(c => !cookies.find(x => x.name === c.name))];
-        const cookieString = all
-          .map((c) => `${c.name}=${c.value}`)
-          .join("; ");
-        resolve(cookieString);
-      } catch (e) {
-        reject(new Error("Failed to get cookies. Make sure you're on Udemy."));
-      }
-    });
-  });
-}
